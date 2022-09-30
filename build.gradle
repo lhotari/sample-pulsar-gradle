@@ -1,0 +1,59 @@
+plugins {
+    id 'java'
+    id 'application'
+    alias(libs.plugins.shadow)
+    alias(libs.plugins.versions)
+    alias(libs.plugins.lombok)
+}
+
+repositories {
+    mavenCentral()
+}
+
+application {
+    mainClass = "sample.pulsar.App"
+}
+
+dependencies {
+    implementation libs.commons.lang3
+    implementation libs.pulsar.client.original
+    implementation libs.slf4j.api
+    runtimeOnly libs.bundles.log4j
+
+    testImplementation libs.junit.jupiter
+    testImplementation libs.assertj.core
+}
+
+// Workaround for invalid metadata for Bookkeeper dependencies which contain <packaging>nar</packaging> in pom.xml
+configurations.all {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        if (details.requested.group == 'org.apache.bookkeeper' &&
+                details.requested.name in ['circe-checksum', 'cpu-affinity', 'native-io']) {
+            details.artifactSelection { ArtifactSelectionDetails asDetails ->
+                asDetails.selectArtifact('jar', null, null)
+            }
+        }
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+task pulsarStart(type: Exec) {
+    commandLine = "docker run --name pulsar-test --detach -it -p 6650:6650 apachepulsar/pulsar:${libs.versions.pulsar.get()} /pulsar/bin/pulsar standalone -nss -nfw".split()
+    standardOutput = System.out
+}
+
+task pulsarStop {
+    doLast {
+        exec {
+            commandLine = 'docker stop pulsar-test'.split()
+            standardOutput = System.out
+        }
+        exec {
+            commandLine = 'docker rm pulsar-test'.split()
+            standardOutput = System.out
+        }
+    }
+}
